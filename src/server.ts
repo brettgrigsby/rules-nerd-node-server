@@ -7,6 +7,7 @@ import { VectorDBQAChain } from "langchain/chains"
 import { PineconeStore } from "langchain/vectorstores/pinecone"
 import { PineconeClient } from "@pinecone-database/pinecone"
 import { OpenAI } from "langchain/llms/openai"
+import { VectorOperationsApi } from "@pinecone-database/pinecone/dist/pinecone-generated-ts-fetch"
 
 dotenv.config()
 const client = new PineconeClient()
@@ -16,7 +17,10 @@ const app = express()
 app.use(bodyParser.json())
 app.use(cors())
 
-let qaChain: VectorDBQAChain
+// let qaChain: VectorDBQAChain
+let openAI: OpenAI
+let embeddings: OpenAIEmbeddings
+let pineconeIndex: VectorOperationsApi
 
 const initializeData = async () => {
   try {
@@ -29,7 +33,7 @@ const initializeData = async () => {
     // const docs = await textSplitter.splitText(fileContents)
     // docs = await mySplitter.createDocuments([fileContents])
 
-    const openAI = new OpenAI({
+    openAI = new OpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
     })
 
@@ -37,15 +41,16 @@ const initializeData = async () => {
       apiKey: process.env.PINECONE_API_KEY,
       environment: process.env.PINECONE_ENVIRONMENT,
     })
-    const pineconeIndex = client.Index(process.env.PINECONE_INDEX)
+    pineconeIndex = client.Index(process.env.PINECONE_INDEX)
 
-    const embeddings = new OpenAIEmbeddings({
+    embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
     })
 
-    const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-      pineconeIndex,
-    })
+    // Do this in the route handler and pass namespace to dbConfig
+    // const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+    //   pineconeIndex,
+    // })
 
     // const docSearch = await MemoryVectorStore.fromTexts(
     //   docs,
@@ -53,9 +58,9 @@ const initializeData = async () => {
     //   embeddings
     // )
 
-    qaChain = VectorDBQAChain.fromLLM(openAI, vectorStore, {
-      returnSourceDocuments: true,
-    })
+    // qaChain = VectorDBQAChain.fromLLM(openAI, vectorStore, {
+    //   returnSourceDocuments: true,
+    // })
     console.log("Initialization complete")
   } catch (e) {
     console.log("Error initializing data")
@@ -70,8 +75,22 @@ app.get("/", async (req, res) => {
 })
 
 app.post("/query", async (req, res) => {
-  const { query } = req.body
-  console.log({ query })
+  const { query, game } = req.body
+  console.log({ query, game })
+  const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
+    pineconeIndex,
+    namespace: game,
+  })
+
+  // const docSearch = await MemoryVectorStore.fromTexts(
+  //   docs,
+  //   docs.map((d, i) => ({ id: i, game: "magic-the-gathering" })),
+  //   embeddings
+  // )
+
+  const qaChain = VectorDBQAChain.fromLLM(openAI, vectorStore, {
+    returnSourceDocuments: true,
+  })
   const result = await qaChain.call({ query })
   const { text, sourceDocuments } = result
   res

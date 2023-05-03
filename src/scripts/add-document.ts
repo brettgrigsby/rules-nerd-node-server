@@ -1,10 +1,12 @@
 import fs from "fs"
 import path from "path"
 import dotenv from "dotenv"
+import pdfParse from "pdf-parse"
 import { PineconeClient } from "@pinecone-database/pinecone"
 import { Document } from "langchain/document"
 import { PineconeStore } from "langchain/vectorstores/pinecone"
 import { OpenAIEmbeddings } from "langchain/embeddings/openai"
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter"
 
 dotenv.config()
 
@@ -27,33 +29,55 @@ function readFileContent(filePath: string): string {
   return fs.readFileSync(filePath, { encoding: "utf-8" })
 }
 
-function getDocsFromTxt(filePath: string, name: string): Document[] {
+async function getDocsFromTxt(
+  filePath: string,
+  name: string
+): Promise<Document[]> {
   const content = readFileContent(filePath)
-  const texts = content.split("\r\r").filter(Boolean)
-  return texts.map((text, i) => {
-    return new Document({
-      metadata: {
-        id: `${name}-${i}`,
-        name,
-      },
-      pageContent: text,
-    })
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 1000,
+    chunkOverlap: 200,
   })
+  return splitter.createDocuments([content], [{ name }])
 }
 
-function getDocsFromFile(filePath: string, name: string): Document[] {
+async function getDocsFromPdf(
+  filePath: string,
+  name: string
+): Promise<Document[]> {
+  const buffer = fs.readFileSync(filePath)
+  const pdfData = await pdfParse(buffer)
+  const content = pdfData.text
+  const splitter = new RecursiveCharacterTextSplitter({
+    chunkSize: 1000,
+    chunkOverlap: 200,
+  })
+  return splitter.createDocuments([content], [{ name }])
+}
+
+async function getDocsFromFile(
+  filePath: string,
+  name: string
+): Promise<Document[]> {
   const fileExtension = path.extname(filePath)
   switch (fileExtension) {
     case ".txt":
       return getDocsFromTxt(filePath, name)
+    case ".pdf":
+      return getDocsFromPdf(filePath, name)
     default:
       throw new Error("Unsupported file extension")
   }
 }
 
-async function storeDocuments(docs: Document[], pineconeIndex: any) {
+async function storeDocuments(
+  docs: Document[],
+  pineconeIndex: any,
+  namespace: string
+) {
   await PineconeStore.fromDocuments(docs, new OpenAIEmbeddings(), {
     pineconeIndex,
+    namespace,
   })
 }
 
@@ -76,8 +100,8 @@ async function main() {
   const name = process.argv[3]
 
   const pineconeIndex = await initializeIndex()
-  const docs = getDocsFromFile(filePath, name)
-  await storeDocuments(docs, pineconeIndex)
+  const docs = await getDocsFromFile(filePath, name)
+  await storeDocuments(docs, pineconeIndex, name)
   console.log("Rules files added to Pinecone index")
 }
 
