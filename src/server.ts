@@ -39,11 +39,13 @@ const initializeData = async () => {
     console.log("got embeddings")
     const docSearch = await MemoryVectorStore.fromTexts(
       docs,
-      docs.map((d, i) => ({ id: i })),
+      docs.map((d, i) => ({ id: i, game: "magic-the-gathering" })),
       embeddings
     )
     console.log("got doc search")
-    qa = RetrievalQAChain.fromLLM(openAI, docSearch.asRetriever())
+    qa = RetrievalQAChain.fromLLM(openAI, docSearch.asRetriever(), {
+      returnSourceDocuments: true,
+    })
     console.log("defined chain")
     // const metaDatas = docs.map((doc, idx) => ({
     //   source: `${idx}-pl`,
@@ -67,8 +69,13 @@ app.post("/query", async (req, res) => {
   const { query } = req.body
   console.log({ query })
   const result = await qa.call({ query })
-  console.log({ result })
-  res.json({ answer: result.text }).status(200)
+  const { text, sourceDocuments } = result
+  res
+    .json({
+      answer: text,
+      sources: sourceDocuments.map((doc) => doc.pageContent),
+    })
+    .status(200)
 })
 
 const port = process.env.PORT || 4000
