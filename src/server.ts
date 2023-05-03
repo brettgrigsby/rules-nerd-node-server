@@ -74,6 +74,17 @@ app.get("/", async (req, res) => {
   res.json({ status: 200 }).status(200)
 })
 
+app.get("/supported-games", async (req, res) => {
+  let games: string[] = []
+  const stats = await pineconeIndex.describeIndexStats({
+    describeIndexStatsRequest: {},
+  })
+  if (stats?.namespaces) {
+    games = Object.keys(stats.namespaces)
+  }
+  res.json({ games }).status(200)
+})
+
 app.post("/query", async (req, res) => {
   const { query, game } = req.body
   console.log({ query, game })
