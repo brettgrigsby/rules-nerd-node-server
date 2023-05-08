@@ -17,7 +17,6 @@ const app = express()
 app.use(bodyParser.json())
 app.use(cors())
 
-// let qaChain: VectorDBQAChain
 let openAI: OpenAI
 let embeddings: OpenAIEmbeddings
 let pineconeIndex: VectorOperationsApi
@@ -25,13 +24,6 @@ let pineconeIndex: VectorOperationsApi
 const initializeData = async () => {
   try {
     console.log("Initializing data")
-    // const fileContents = fs.readFileSync(
-    //   "src/rules-docs/magic-the-gathering.txt",
-    //   "utf8"
-    // )
-    // const docs = fileContents.split("\r\r").filter(Boolean)
-    // const docs = await textSplitter.splitText(fileContents)
-    // docs = await mySplitter.createDocuments([fileContents])
 
     openAI = new OpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
@@ -47,20 +39,6 @@ const initializeData = async () => {
       openAIApiKey: process.env.OPENAI_API_KEY,
     })
 
-    // Do this in the route handler and pass namespace to dbConfig
-    // const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-    //   pineconeIndex,
-    // })
-
-    // const docSearch = await MemoryVectorStore.fromTexts(
-    //   docs,
-    //   docs.map((d, i) => ({ id: i, game: "magic-the-gathering" })),
-    //   embeddings
-    // )
-
-    // qaChain = VectorDBQAChain.fromLLM(openAI, vectorStore, {
-    //   returnSourceDocuments: true,
-    // })
     console.log("Initialization complete")
   } catch (e) {
     console.log("Error initializing data")
@@ -71,7 +49,7 @@ const initializeData = async () => {
 initializeData()
 
 app.get("/", async (req, res) => {
-  res.json({ status: 200 }).status(200)
+  res.json({ message: "All hail the nerd!" }).status(200)
 })
 
 app.get("/supported-games", async (req, res) => {
@@ -80,7 +58,7 @@ app.get("/supported-games", async (req, res) => {
     describeIndexStatsRequest: {},
   })
   if (stats?.namespaces) {
-    games = Object.keys(stats.namespaces)
+    games = Object.keys(stats.namespaces).filter((game) => game !== "vmlynr")
   }
   res.json({ games }).status(200)
 })
@@ -92,12 +70,6 @@ app.post("/query", async (req, res) => {
     pineconeIndex,
     namespace: game,
   })
-
-  // const docSearch = await MemoryVectorStore.fromTexts(
-  //   docs,
-  //   docs.map((d, i) => ({ id: i, game: "magic-the-gathering" })),
-  //   embeddings
-  // )
 
   const qaChain = VectorDBQAChain.fromLLM(openAI, vectorStore, {
     returnSourceDocuments: true,
